@@ -14,3 +14,7 @@ Configuration is done through environment variables:
 * `U2A_RECONNECT_DELAY_LIMIT_MS` (default=`60000`): maximum reconnect delay in milliseconds;
 * `U2A_NO_RECONNECT` (default=`false`): Do not reconnect after connection failure;
 * `U2A_DEBUG` (default=`false`): enable extensive logging;
+
+## Testing
+
+Directory [util](/util) contains Python3 scripts for simple Datagram produces and AMQP consumer.
