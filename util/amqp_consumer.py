@@ -33,10 +33,11 @@ async def amain() -> int:
         queue: aio_pika.Queue = await channel.declare_queue(
             durable=False, auto_delete=True
         )
-        await queue.bind(
-            exchange=await channel.get_exchange(name=args.exchange),
-            routing_key=args.routing_key,
-        )
+        if args.exchange:
+            await queue.bind(
+                exchange=await channel.get_exchange(name=args.exchange),
+                routing_key=args.routing_key,
+            )
         async with queue.iterator() as queue_iter:
             async for message in queue_iter:
                 async with message.process():

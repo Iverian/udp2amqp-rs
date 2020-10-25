@@ -11,7 +11,6 @@ from typing import Iterator, Tuple
 from urllib.parse import urlparse
 
 LOGGING_FORMAT = "[%(levelname)s] : %(message)s"
-WAIT_INTERVAL = 0.01
 
 
 def parse_udp_url(url: str) -> Tuple[str, int]:
@@ -34,6 +33,7 @@ def main():
         help="number of messages to produce (0 is unlimited)",
     )
     parser.add_argument("-d", "--debug", action="store_true")
+    parser.add_argument("-w", "--wait-interval", default=10)
     args = parser.parse_args()
     logging.basicConfig(
         stream=sys.stderr,
@@ -41,6 +41,7 @@ def main():
         level=("DEBUG" if args.debug else "INFO"),
     )
 
+    wait_interval_s = args.wait_interval / 1000
     addr = parse_udp_url(args.url)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     iterator: Iterator[int] = (
@@ -55,7 +56,7 @@ def main():
             ).encode("ascii")
             logging.debug("sending data: %r", data)
             sock.sendto(data, addr)
-            time.sleep(WAIT_INTERVAL)
+            time.sleep(wait_interval_s)
     finally:
         sock.close()
 

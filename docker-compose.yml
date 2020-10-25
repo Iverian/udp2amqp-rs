@@ -6,16 +6,4 @@ services:
     ports:
       - "5672:5672/tcp"
     environment:
-      - RABBITMQ_DEFAULT_USER=user
-      - RABBITMQ_DEFAULT_PASS=password
-      - RABBITMQ_DEFAULT_VHOST=test
-  udp2amqp:
-    build: "."
-    image: udp2amqp
-    environment:
-      - RUST_BACKTRACE=1
-      - U2A_DEBUG=true
-      - U2A_AMQP_URI=amqp://user:password@rabbitmq/test
-      - U2A_UDP_BIND_ADDR=0.0.0.0:2800
-    ports:
-      - "2800:2800/udp"
+      - "RABBITMQ_DEFAULT_VHOST=test"

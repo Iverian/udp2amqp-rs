@@ -1,5 +1,6 @@
 use envconfig::Envconfig;
-use stable_eyre::eyre;
+use lapin::Error;
+use stable_eyre::eyre::{self, eyre, Result};
 use std::cmp;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -14,7 +15,7 @@ extern crate log;
 
 const RECV_BUF_SIZE: usize = 65535;
 
-#[derive(Envconfig)]
+#[derive(Envconfig, Clone)]
 pub struct Settings {
     #[envconfig(from = "U2A_UDP_BIND_ADDR")]
     pub udp_bind_addr: String,
@@ -25,14 +26,14 @@ pub struct Settings {
     #[envconfig(from = "U2A_AMQP_ROUTING_KEY", default = "")]
     pub amqp_routing_key: String,
     #[envconfig(from = "U2A_HTTP_PROBE_PORT", default = "8080")]
-    pub http_probe_port: u8,
+    pub http_probe_port: u16,
     #[envconfig(from = "U2A_RECONNECT_DELAY_LIMIT_MS", default = "60000")]
     pub reconnect_delay_limit_ms: u64,
     #[envconfig(from = "U2A_DEBUG", default = "false")]
     pub debug: bool,
 }
 
-async fn tokio_main(rt: Arc<Runtime>) -> eyre::Result<()> {
+async fn tokio_main(runtime: Arc<Runtime>) -> Result<()> {
     let settings = Settings::init_from_env()?;
     setup_logging(settings.debug)?;
 
@@ -41,7 +42,7 @@ async fn tokio_main(rt: Arc<Runtime>) -> eyre::Result<()> {
 
     let mut retries = 0;
     loop {
-        if let Err(why) = run(rt.clone(), probe_state.clone(), &settings).await {
+        if let Err(why) = run(runtime.clone(), probe_state.clone(), &settings).await {
             info!("setting not ready status");
             probe_state.store(false, Ordering::Relaxed);
 
@@ -60,15 +61,20 @@ async fn run(
     runtime: Arc<Runtime>,
     probe_state: Arc<AtomicBool>,
     settings: &Settings,
-) -> eyre::Result<()> {
-    let (_, amqp_channel) = amqp_connect(runtime, &settings).await?;
+) -> Result<()> {
     let udp_socket = tokio::net::UdpSocket::bind(&settings.udp_bind_addr)
         .await
         .unwrap_or_else(|_| panic!("unable to bind to udp socket `{}`", settings.udp_bind_addr));
     info!("bound to udp socket `{}`", settings.udp_bind_addr);
 
+    let (_, amqp_channel) = amqp_connect(runtime, &settings)
+        .await
+        .map_err(|err| match err {
+            Error::IOError(why) => eyre!(why),
+            _ => panic!("unable to connect to AMQP server: {}", err),
+        })?;
+
     let mut buf = [0; RECV_BUF_SIZE];
-    let publish_options = lapin::options::BasicPublishOptions::default();
 
     info!("setting ready status");
     probe_state.store(true, Ordering::Relaxed);
@@ -80,7 +86,7 @@ async fn run(
             .basic_publish(
                 &settings.amqp_exchange,
                 &settings.amqp_routing_key,
-                publish_options,
+                lapin::options::BasicPublishOptions::default(),
                 buf[..len].to_vec(),
                 lapin::BasicProperties::default(),
             )
@@ -91,7 +97,7 @@ async fn run(
 async fn amqp_connect(
     runtime: Arc<Runtime>,
     settings: &Settings,
-) -> eyre::Result<(lapin::Connection, lapin::Channel)> {
+) -> Result<(lapin::Connection, lapin::Channel), lapin::Error> {
     let connection = lapin::Connection::connect(
         &settings.amqp_uri,
         lapin::ConnectionProperties::default().with_tokio(runtime),
@@ -166,6 +172,7 @@ fn main() -> eyre::Result<()> {
     stable_eyre::install()?;
     let rt = Arc::new(
         tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(4)
             .enable_all()
             .build()?,
     );
