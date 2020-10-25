@@ -13,7 +13,6 @@ use tokio_amqp::*;
 extern crate log;
 
 const RECV_BUF_SIZE: usize = 65535;
-const WAIT_MAX_MS: u64 = 60 * 1000;
 
 #[derive(Envconfig)]
 pub struct Settings {
@@ -27,6 +26,8 @@ pub struct Settings {
     pub amqp_routing_key: String,
     #[envconfig(from = "U2A_HTTP_PROBE_PORT", default = "8080")]
     pub http_probe_port: u8,
+    #[envconfig(from = "U2A_RECONNECT_DELAY_LIMIT_MS", default = "60000")]
+    pub reconnect_delay_limit_ms: u64,
     #[envconfig(from = "U2A_DEBUG", default = "false")]
     pub debug: bool,
 }
@@ -46,7 +47,7 @@ async fn tokio_main(rt: Arc<Runtime>) -> eyre::Result<()> {
 
             error!("retrying after error: {}", why);
             tokio::time::sleep(std::time::Duration::from_millis(cmp::min(
-                WAIT_MAX_MS,
+                settings.reconnect_delay_limit_ms,
                 (2 as u64).pow(retries) * 100,
             )))
             .await;
@@ -97,6 +98,7 @@ async fn amqp_connect(
     )
     .await?;
     info!("connected to AMQP server `{}`", settings.amqp_uri);
+
     let channel = connection.create_channel().await?;
     if !settings.amqp_exchange.is_empty() {
         info!("declaring direct exchange `{}`", settings.amqp_exchange);
