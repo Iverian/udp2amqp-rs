@@ -1,4 +1,9 @@
 /target
+/debug
+
 tags
-.vscode/
 venv/
+
+.idea/
+.vscode/
+trash/
