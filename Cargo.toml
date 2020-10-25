@@ -1,0 +1,19 @@
+[package]
+name = "udp2amqp"
+version = "0.1.0"
+authors = ["Артем Старченко <41ways1ucky@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+log = "0.4"
+fern = "0.5"
+tide = "0.14"
+lapin = "1.4"
+chrono = "0.4"
+envconfig = "0.9"
+tokio-amqp = "0.2"
+stable-eyre = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "0.3", features = ["rt", "rt-multi-thread", "net", "time"]}
