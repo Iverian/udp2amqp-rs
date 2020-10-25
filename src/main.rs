@@ -29,6 +29,8 @@ pub struct Settings {
     pub http_probe_port: u16,
     #[envconfig(from = "U2A_RECONNECT_DELAY_LIMIT_MS", default = "60000")]
     pub reconnect_delay_limit_ms: u64,
+    #[envconfig(from = "U2A_NO_RECONNECT", default = "false")]
+    pub no_reconnect: bool,
     #[envconfig(from = "U2A_DEBUG", default = "false")]
     pub debug: bool,
 }
@@ -38,14 +40,19 @@ async fn tokio_main(runtime: Arc<Runtime>) -> Result<()> {
     setup_logging(settings.debug)?;
 
     let probe_state = Arc::new(AtomicBool::new(false));
-    liveness_probe_server(probe_state.clone(), &settings).await;
+    if settings.http_probe_port != 0 {
+        liveness_probe_server(probe_state.clone(), &settings).await;
+    }
 
     let mut retries = 0;
     loop {
         if let Err(why) = run(runtime.clone(), probe_state.clone(), &settings).await {
+            if settings.no_reconnect {
+                break;
+            }
+
             info!("setting not ready status");
             probe_state.store(false, Ordering::Relaxed);
-
             error!("retrying after error: {}", why);
             tokio::time::sleep(std::time::Duration::from_millis(cmp::min(
                 settings.reconnect_delay_limit_ms,
@@ -55,6 +62,7 @@ async fn tokio_main(runtime: Arc<Runtime>) -> Result<()> {
             retries += 1;
         }
     }
+    Ok(())
 }
 
 async fn run(
